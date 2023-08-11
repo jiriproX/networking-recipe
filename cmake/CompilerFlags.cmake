@@ -4,12 +4,17 @@
 # SPDX-License-Identifier: Apache 2.0
 #
 
-option(ENABLE_WARNINGS "Enable compiler warnings" ON)
-option(ENABLE_SPECTRE  "Enable Spectre mitigations" ON)
+include(CMakePrintHelpers)
 
-# Each macro in this function implements a section of the
-# C & C++ Compiler Flag Standards in the Intel Secure Coding Standards
-# document.
+option(ENABLE_WARNING_FLAGS "Enable compiler warnings" ON)
+option(ENABLE_SPECTRE_FLAGS "Enable Spectre mitigations" ON)
+
+#-----------------------------------------------------------------------
+# Get security flags.
+#
+# Each macro implements a section of the C & C++ Compiler Flag Standards
+# in the Intel Secure Coding Standards.
+#-----------------------------------------------------------------------
 function(_getSecurityFlags mode cflags)
 
   # Compiler Warnings and Error Detection
@@ -116,7 +121,7 @@ function(_getSecurityFlags mode cflags)
   set(_cflags)
   set(_mode ${mode})
 
-  if(ENABLE_WARNINGS)
+  if(ENABLE_WARNING_FLAGS)
     setCompilerWarnings(mode _cflags)
   endif()
 
@@ -126,7 +131,7 @@ function(_getSecurityFlags mode cflags)
   setPIE(mode _cflags)
   setRelocation(mode _cflags)
 
-  if(ENABLE_SPECTRE)
+  if(ENABLE_SPECTRE_FLAGS)
     setBoundsCheck(mode _cflags)
     setTargetInjection(mode _cflags)
   endif()
@@ -136,41 +141,65 @@ function(_getSecurityFlags mode cflags)
 
 endfunction(_getSecurityFlags)
 
-_getSecurityFlags("Debug" debugFlags)
-_getSecurityFlags("Release" releaseFlags)
+#-----------------------------------------------------------------------
+# Define compiler flags.
+#-----------------------------------------------------------------------
+function(_defineCompilerFlags)
 
-if(DEBUG_COMPILER_FLAGS)
-  cmake_print_variables(debugFlags)
-  cmake_print_variables(releaseFlags)
-endif()
+  _getSecurityFlags("Debug" debugFlags)
+  _getSecurityFlags("Release" releaseFlags)
 
-function(_getVariableName stem mode var)
-  string(CONCAT name "CMAKE_" ${stem} "_FLAGS")
-  string(TOUPPER "${mode}" MODE)
-  if(NOT MODE STREQUAL "")
-    string(CONCAT name ${name} "_" ${MODE})
+  if(DEBUG_COMPILER_FLAGS)
+    cmake_print_variables(debugFlags)
+    cmake_print_variables(releaseFlags)
+    message("")
   endif()
-  set(${var} "${name}" PARENT_SCOPE)
-endfunction()
 
-function(_assignVariable stem mode flags)
-  _getVariableName("${stem}" "${mode}" var)
-  set(value "${${var}}")
-  if(NOT value STREQUAL "")
-    string(CONCAT ${var} "${value}" " " "${flags}")
-  else()
-    set(${var} "${flags}")
-  endif()
-endfunction()
+  function(_getVariableName stem mode var)
+    string(CONCAT name "CMAKE_" ${stem} "_FLAGS")
+    string(TOUPPER "${mode}" MODE)
+    if(NOT MODE STREQUAL "")
+      string(CONCAT name ${name} "_" ${MODE})
+    endif()
+    set(${var} "${name}" PARENT_SCOPE)
+  endfunction()
 
-set(modes Debug MinSizeRel Release RelWithDebInfo)
-
-foreach(_stem C CXX)
-  foreach(_mode ${modes})
-    if(_mode STREQUAL "Debug")
-      _assignVariable("${_stem}" "${_mode}" ${debugFlags})
+  function(_assignVariable stem mode flags)
+    _getVariableName("${stem}" "${mode}" var)
+    set(value "${${var}}")
+    if(NOT value STREQUAL "")
+      string(CONCAT ${var} "${value}" " " "${flags}")
     else()
-      _assignVariable("${_stem}" "${_mode}" ${releaseFlags})
+      set(${var} "${flags}")
+    endif()
+    if(DEBUG_COMPILER_FLAGS)
+      cmake_print_variables(${var})
+    endif()
+  endfunction()
+
+  set(modes Debug MinSizeRel Release RelWithDebInfo)
+
+  foreach(_stem C CXX)
+    foreach(_mode ${modes})
+      _getVariableName("${_stem}" "${_mode}" var)
+      cmake_print_variables(${var})
+    endforeach()
+    message("")
+  endforeach()
+
+  foreach(_stem C CXX)
+    foreach(_mode ${modes})
+      if(_mode STREQUAL "Debug")
+        _assignVariable("${_stem}" "${_mode}" ${debugFlags})
+      else()
+        _assignVariable("${_stem}" "${_mode}" ${releaseFlags})
+      endif()
+    endforeach()
+    if(DEBUG_COMPILER_FLAGS)
+      message("")
     endif()
   endforeach()
-endforeach()
+
+endfunction(_defineCompilerFlags)
+
+_defineCompilerFlags()
