@@ -7,6 +7,7 @@
 include(CMakePrintHelpers)
 
 option(ENABLE_WARNING_FLAGS "Enable compiler warnings" OFF)
+option(ENABLE_SANITIZE_CFI  "Enable -sanitize=cfi" ON)
 option(ENABLE_SPECTRE_FLAGS "Enable Spectre mitigations" ON)
 
 #-----------------------------------------------------------------------
@@ -35,14 +36,13 @@ function(_get_security_flags_list config cflags)
 
   # Control Flow Integrity
   macro(setFlowIntegrity config cflags)
-    if(${config} STREQUAL "Debug")
-      list(APPEND ${cflags}
-        -fsanitize=cfi
-      )
-    else()
+    if(ENABLE_SANITIZE_CFI)
+      list(APPEND ${cflags} -fsanitize=cfi)
+    endif()
+
+    if(NOT ${config} STREQUAL "Debug")
       list(APPEND ${cflags}
         -flto                 # link-time optimization
-        -fsanitize=cfi
         -fvisibility=hidden   # all ELF symbols are hidden by default
       )
     endif()
@@ -183,6 +183,9 @@ function(define_security_flags_variables)
   endforeach()
 endfunction(define_security_flags_variables)
 
+set(_COMPILER_FLAGS_CONFIGS DEBUG MINSIZEREL RELEASE RELWITHDEBINFO)
+set(_COMPILER_FLAGS_RELEASE_CONFIGS MINSIZEREL RELEASE RELWITHDEBINFO)
+
 #-----------------------------------------------------------------------
 # Define compiler and linker INIT variables.
 #-----------------------------------------------------------------------
@@ -208,7 +211,7 @@ function(define_compiler_init_variables)
 
     # CMAKE_<LANG>_FLAGS_<CONFIG>_INIT
     # These configs all use the RELEASE security flags.
-    foreach(CONFIG RELEASE RELWITHDEBINFO MINSIZEREL)
+    foreach(CONFIG ${_COMPILER_FLAGS_RELEASE_CONFIGS})
       set(VAR CMAKE_${LANG}_FLAGS_${CONFIG}_INIT)
       string(JOIN " " VALUE
           "${default_flags_${CONFIG}}"
@@ -220,7 +223,7 @@ function(define_compiler_init_variables)
   endforeach()
 
   # CMAKE_<TYPE>_LINKER_FLAGS_<CONFIG>_INIT
-  foreach(CONFIG DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+  foreach(CONFIG ${_COMPILER_FLAGS_CONFIGS})
     foreach(TYPE EXE SHARED)
       set(VAR CMAKE_${TYPE}_LINKER_FLAGS_${CONFIG}_INIT)
       set(${VAR} "${LDFLAGS}" CACHE STRING "")
@@ -228,3 +231,29 @@ function(define_compiler_init_variables)
     endforeach()
   endforeach()
 endfunction(define_compiler_init_variables)
+
+#-----------------------------------------------------------------------
+# Print compiler flags variables
+#-----------------------------------------------------------------------
+function(print_security_flags_variables)
+  foreach(CONFIG DEBUG RELEASE)
+    cmake_print_variables(SECURITY_FLAGS_${CONFIG}_LIST)
+  endforeach()
+endfunction()
+
+function(print_compiler_init_variables LANG)
+  foreach(CONFIG ${_COMPILER_FLAGS_CONFIGS})
+    cmake_print_variables(CMAKE_${LANG}_FLAGS_${CONFIG}_INIT)
+  endforeach()
+endfunction()
+
+function(print_compiler_flags_variables LANG)
+  foreach(CONFIG ${_COMPILER_FLAGS_CONFIGS})
+    cmake_print_variables(CMAKE_${LANG}_FLAGS_${CONFIG})
+  endforeach()
+endfunction()
+
+#-----------------------------------------------------------------------
+# Define variables
+#-----------------------------------------------------------------------
+define_security_flags_variables()

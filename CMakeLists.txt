@@ -7,8 +7,14 @@
 # Version 3.15 is the baseline for P4 Control Plane.
 cmake_minimum_required(VERSION 3.15)
 
-# CMAKE_BUILD_TYPE must be set before the first project() command.
+# Set before the first project() command.
 set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Type of build to perform")
+
+# Include before the project() command.
+set(ENABLE_SANITIZE_CFI OFF)
+set(ENABLE_SPECTRE_FLAGS OFF)
+include(cmake/CompilerFlags.cmake)
+define_compiler_init_variables()
 
 project(networking-recipe VERSION 23.07 LANGUAGES C CXX)
 
