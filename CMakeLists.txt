@@ -10,18 +10,12 @@ cmake_minimum_required(VERSION 3.15)
 # Set before the first project() command.
 set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Type of build to perform")
 
-# Include before the project() command.
-set(ENABLE_PIE_FLAG OFF)
-set(ENABLE_SANITIZE_CFI OFF)
-set(ENABLE_SPECTRE_FLAGS OFF)
-include(cmake/CompilerFlags.cmake)
-define_compiler_init_variables()
-
 project(networking-recipe VERSION 23.07 LANGUAGES C CXX)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 include(CMakePrintHelpers)
+include(CompilerSettings)
 include(CTest)
 include(FindPkgConfig)
 include(GNUInstallDirs)
@@ -66,7 +60,6 @@ include(SelectTdiTarget)
 ###################
 
 option(SET_RPATH    "Set RPATH in libraries and executables" OFF)
-
 option(WITH_KRNLMON "Enable Kernel Monitor support" ON)
 option(WITH_OVSP4RT "Enable OVS support" ON)
 
@@ -78,9 +71,12 @@ endif()
 cmake_print_variables(WITH_KRNLMON)
 cmake_print_variables(WITH_OVSP4RT)
 
-###########################
-# Global compiler options #
-###########################
+############################
+# Global compiler settings #
+############################
+
+add_basic_settings()
+add_security_settings(${CMAKE_BUILD_TYPE})
 
 add_compile_options(-D${TARGETFLAG})
 
@@ -91,8 +87,6 @@ if(NOT DEPEND_INSTALL_DIR STREQUAL "")
         link_directories(${DEPEND_INSTALL_DIR}/lib64)
     endif()
 endif()
-
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 ############################
 # find_xxxx() search paths #
