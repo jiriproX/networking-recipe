@@ -11,6 +11,7 @@ cmake_minimum_required(VERSION 3.15)
 set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Type of build to perform")
 
 # Include before the project() command.
+set(ENABLE_PIE_FLAG OFF)
 set(ENABLE_SANITIZE_CFI OFF)
 set(ENABLE_SPECTRE_FLAGS OFF)
 include(cmake/CompilerFlags.cmake)

@@ -7,6 +7,7 @@
 include(CMakePrintHelpers)
 
 option(ENABLE_WARNING_FLAGS "Enable compiler warnings" OFF)
+option(ENABLE_PIE_FLAG      "Enable position independent executables" ON)
 option(ENABLE_SANITIZE_CFI  "Enable -sanitize=cfi" ON)
 option(ENABLE_SPECTRE_FLAGS "Enable Spectre mitigations" ON)
 
@@ -128,7 +129,9 @@ function(_get_security_flags_list config cflags)
   setFlowIntegrity(config _cflags)
   setFormatDefense(config _cflags)
   setStackDefense(config _cflags)
-  setPIE(config _cflags)
+  if(ENABLE_PIE_FLAG)
+    setPIE(config _cflags)
+  endif()
   setRelocation(config _cflags)
 
   if(ENABLE_SPECTRE_FLAGS)
