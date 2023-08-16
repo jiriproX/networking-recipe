@@ -76,7 +76,8 @@ cmake_print_variables(WITH_OVSP4RT)
 ############################
 
 add_basic_settings()
-add_security_settings(${CMAKE_BUILD_TYPE})
+#add_recent_security_settings(${CMAKE_BUILD_TYPE})
+add_legacy_security_settings()
 
 add_compile_options(-D${TARGETFLAG})
 

@@ -25,7 +25,30 @@ function(add_basic_settings)
   add_link_options("-Wl,-z,now")
 endfunction(add_basic_settings)
 
-function(add_security_settings CONFIG)
+# Defines the security settings used in earlier versions
+# of the software.
+function(add_legacy_security_settings)
+  # Format String Defense
+  add_compile_options("-Wformat")
+  add_compile_options("-Wformat-security")
+  add_compile_options("-Werror=format-security")
+
+  # Position Independent Code
+  set(CMAKE_POSITION_INDEPENDENT_CODE TRUE PARENT_SCOPE)
+
+  # Preprocessor Macros
+  add_compile_options("-D_FORTIFY_SOURCE=2")
+
+  # Read-only Relocation
+  add_link_options("-Wl,-z,relro")
+
+  # Stack Protection
+  add_compile_options("-fstack-protector-strong")
+endfunction()
+
+# Defines security settings according to the
+# Intel Secure Coding Standards.
+function(add_recent_security_settings CONFIG)
   string(TOUPPER ${CONFIG} CONFIG)
   if(CONFIG STREQUAL "DEBUG")
     set(IS_RELEASE FALSE)
@@ -68,7 +91,7 @@ function(add_security_settings CONFIG)
   check_and_add_option("-Wl,-z,noexecstack" HAVE_NOEXECSTACK)
 
   # Position Independent Code
-  set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
+  set(CMAKE_POSITION_INDEPENDENT_CODE TRUE PARENT_SCOPE)
 
   # Position Independent Execution
   check_pie_supported(LANGUAGES C CXX)
@@ -81,6 +104,9 @@ function(add_security_settings CONFIG)
 
   # Read-only Relocation
   check_and_add_option("-Wl,-z,relro" HAVE_RELRO)
+
+  # Stack Protection
+  add_compile_options("-fstack-protector-strong")
 
   # Spectre Protection
   if(IS_RELEASE AND ENABLE_SPECTRE_SETTINGS)
@@ -95,4 +121,4 @@ function(add_security_settings CONFIG)
     # Mitigating Branch Target Injection (Spectre Variant 2)
     check_and_add_option("-mretpoline" HAVE_RETPOLINE)
   endif()
-endfunction(add_security_settings)
+endfunction(add_recent_security_settings)
