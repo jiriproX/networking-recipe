@@ -6,20 +6,20 @@
 
 include(CMakePrintHelpers)
 
-option(ENABLE_WARNING_FLAGS "Enable compiler warnings" ON)
+option(ENABLE_WARNING_FLAGS "Enable compiler warnings" OFF)
 option(ENABLE_SPECTRE_FLAGS "Enable Spectre mitigations" ON)
 
 #-----------------------------------------------------------------------
-# Get security flags.
+# Get list of security flags.
 #
 # Each macro implements a section of the C & C++ Compiler Flag Standards
 # in the Intel Secure Coding Standards.
 #-----------------------------------------------------------------------
-function(_getSecurityFlags mode cflags)
+function(_get_security_flags_list config cflags)
 
   # Compiler Warnings and Error Detection
-  macro(setCompilerWarnings mode cflags)
-    if(${mode} STREQUAL "Debug")
+  macro(setCompilerWarnings config cflags)
+    if(${config} STREQUAL "Debug")
       list(APPEND ${cflags}
         -Wall
         -Wextra
@@ -34,8 +34,8 @@ function(_getSecurityFlags mode cflags)
   endmacro()
 
   # Control Flow Integrity
-  macro(setFlowIntegrity mode cflags)
-    if(${mode} STREQUAL "Debug")
+  macro(setFlowIntegrity config cflags)
+    if(${config} STREQUAL "Debug")
       list(APPEND ${cflags}
         -fsanitize=cfi
       )
@@ -49,8 +49,8 @@ function(_getSecurityFlags mode cflags)
   endmacro()
 
   # Format String Defense
-  macro(setFormatDefense mode cflags)
-    if(${mode} STREQUAL "Debug")
+  macro(setFormatDefense config cflags)
+    if(${config} STREQUAL "Debug")
       list(APPEND ${cflags}
         -Wformat
         -Wformat-security
@@ -65,8 +65,8 @@ function(_getSecurityFlags mode cflags)
   endmacro()
 
   # Inexecutable Stack
-  macro(setStackDefense mode cflags)
-    if(NOT ${mode} STREQUAL "Debug")
+  macro(setStackDefense config cflags)
+    if(NOT ${config} STREQUAL "Debug")
       list(APPEND ${cflags}
         # passed to linker
         # -z noexecstack
@@ -76,7 +76,7 @@ function(_getSecurityFlags mode cflags)
   endmacro()
 
   # Position Independent Execution
-  macro(setPIE mode cflags)
+  macro(setPIE config cflags)
     list(APPEND ${cflags}
       # passed to compiler
       -fPIE
@@ -86,15 +86,15 @@ function(_getSecurityFlags mode cflags)
   endmacro()
 
   # Preprocessor Macros
-  macro(setFortfy mode cflags)
+  macro(setFortfy config cflags)
     list(APPEND ${cflags}
       -D_FORTIFY_FLAGS=2
     )
   endmacro()
 
   # Read-only Relocation
-  macro(setRelocation mode cflags)
-    if(NOT ${mode} STREQUAL "Release")
+  macro(setRelocation config cflags)
+    if(NOT ${config} STREQUAL "Release")
       list(APPEND ${cflags}
         # passed to linker
         -Wl,-z,relro
@@ -103,7 +103,7 @@ function(_getSecurityFlags mode cflags)
   endmacro()
 
   # Bounds Check Bypass (Spectre Variant 1)
-  macro(setBoundsCheck mode cflags)
+  macro(setBoundsCheck config cflags)
     list(APPEND ${cflags}
       -mconditional-branch=keep
       -mconditional-branch=pattern-report
@@ -112,91 +112,119 @@ function(_getSecurityFlags mode cflags)
   endmacro()
 
   # Branch Target Injection (Spectre Variant 2)
-  macro(setTargetInjection mode cflags)
+  macro(setTargetInjection config cflags)
     list(APPEND ${cflags}
       -mretpoline
     )
   endmacro()
 
   set(_cflags)
-  set(_mode ${mode})
+  set(_mode ${config})
 
   if(ENABLE_WARNING_FLAGS)
-    setCompilerWarnings(mode _cflags)
+    setCompilerWarnings(config _cflags)
   endif()
 
-  setFlowIntegrity(mode _cflags)
-  setFormatDefense(mode _cflags)
-  setStackDefense(mode _cflags)
-  setPIE(mode _cflags)
-  setRelocation(mode _cflags)
+  setFlowIntegrity(config _cflags)
+  setFormatDefense(config _cflags)
+  setStackDefense(config _cflags)
+  setPIE(config _cflags)
+  setRelocation(config _cflags)
 
   if(ENABLE_SPECTRE_FLAGS)
-    setBoundsCheck(mode _cflags)
-    setTargetInjection(mode _cflags)
+    setBoundsCheck(config _cflags)
+    setTargetInjection(config _cflags)
   endif()
 
-  list(JOIN _cflags " " _cflags)
   set(${cflags} ${_cflags} PARENT_SCOPE)
 
-endfunction(_getSecurityFlags)
+endfunction(_get_security_flags_list)
 
 #-----------------------------------------------------------------------
-# Define compiler flags.
+# Get extra compiler and linker flags.
 #-----------------------------------------------------------------------
-_getSecurityFlags("Debug" debugFlags)
-_getSecurityFlags("Release" releaseFlags)
+function(_get_extra_compiler_flags CFLAGS LDFLAGS)
 
-if(DEBUG_COMPILER_FLAGS)
-  cmake_print_variables(debugFlags)
-  cmake_print_variables(releaseFlags)
-  message("")
-endif()
+  # Compiler flags
+  string(JOIN " " cflags
+      -pipe
+      -feliminate-unused-debug-types
+  )
 
-function(_getVariableName stem mode var)
-  string(CONCAT name "CMAKE_" ${stem} "_FLAGS")
-  string(TOUPPER "${mode}" MODE)
-  if(NOT MODE STREQUAL "")
-    string(CONCAT name ${name} "_" ${MODE})
-  endif()
-  set(${var} "${name}" PARENT_SCOPE)
-endfunction()
+  # Linker Flags
+  string(JOIN " " ldflags
+      -Wl,-O1
+      -Wl,--hash-style=gnu
+      -Wl,--as-needed
+      -Wl,-z,now
+  )
 
-function(_assignVariable stem mode flags)
-  _getVariableName("${stem}" "${mode}" var)
-  set(value "${${var}}")
-  if(NOT value STREQUAL "")
-    string(CONCAT _var "${value}" " " "${flags}")
-  else()
-    set(_var "${flags}")
-  endif()
-  if(DEBUG_COMPILER_FLAGS)
-    cmake_print_variables(${_var})
-  endif()
-  set(${var} ${_var} PARENT_SCOPE)
-endfunction()
+  set(${CFLAGS} ${cflags} PARENT_SCOPE)
+  set(${LDFLAGS} ${ldflags} PARENT_SCOPE)
 
-set(modes Debug MinSizeRel Release RelWithDebInfo)
+endfunction(_get_extra_compiler_flags)
 
-if(DEBUG_COMPILER_FLAGS)
-  foreach(_stem C CXX)
-    foreach(_mode ${modes})
-      _getVariableName("${_stem}" "${_mode}" var)
-      cmake_print_variables(${var})
+#-----------------------------------------------------------------------
+# Define SECURITY_FLAGS_<CONFIG> variables.
+#-----------------------------------------------------------------------
+function(define_security_flags_variables)
+  foreach(config Debug Release)
+    _get_security_flags_list(${config} flagsList)
+
+    # SECURITY_FLAGS_<CONFIG>_LIST
+    string(TOUPPER ${config} CONFIG)
+    set(SECURITY_FLAGS_${CONFIG}_LIST "${flagsList}" CACHE STRING
+        "List of security flags for ${CONFIG} builds")
+
+    # SECURITY_FLAGS_<CONFIG>
+    list(JOIN flagsList " " flags)
+    set(SECURITY_FLAGS_${CONFIG} "${flags}" CACHE STRING
+        "Security flags for ${CONFIG} builds")
+  endforeach()
+endfunction(define_security_flags_variables)
+
+#-----------------------------------------------------------------------
+# Define compiler and linker INIT variables.
+#-----------------------------------------------------------------------
+function(define_compiler_init_variables)
+  # These are the built-in defaults.
+  set(default_flags_DEBUG "-g")
+  set(default_flags_MINSIZEREL "-Os -DNDEBUG")
+  set(default_flags_RELEASE "-O3 -DNDEBUG")
+  set(default_flags_RELWITHDEBINFO "-O2 -g -DNDEBUG")
+
+  _get_extra_compiler_flags(CFLAGS LDFLAGS)
+
+  foreach(LANG C CXX)
+    # CMAKE_<LANG>_FLAGS_DEBUG_INIT
+    # Uses the DEBUG security flags.
+    set(VAR "CMAKE_${LANG}_FLAGS_DEBUG_INIT")
+    string(JOIN " " VALUE
+        "${default_flags_DEBUG}"
+        "${CFLAGS}"
+        "${SECURITY_FLAGS_DEBUG}")
+    set(${VAR} "${VALUE}" CACHE STRING "")
+    mark_as_advanced(${VAR})
+
+    # CMAKE_<LANG>_FLAGS_<CONFIG>_INIT
+    # These configs all use the RELEASE security flags.
+    foreach(CONFIG RELEASE RELWITHDEBINFO MINSIZEREL)
+      set(VAR CMAKE_${LANG}_FLAGS_${CONFIG}_INIT)
+      string(JOIN " " VALUE
+          "${default_flags_${CONFIG}}"
+          "${CFLAGS}"
+          "${SECURITY_FLAGS_RELEASE}")
+      set(${VAR} "${VALUE}" CACHE STRING "")
+      mark_as_advanced(${VAR})
     endforeach()
-    message("")
   endforeach()
-endif()
 
-foreach(_stem C CXX)
-  foreach(_mode ${modes})
-    if(_mode STREQUAL "Debug")
-      _assignVariable("${_stem}" "${_mode}" ${debugFlags})
-    else()
-      _assignVariable("${_stem}" "${_mode}" ${releaseFlags})
-    endif()
+  # CMAKE_<TYPE>_LINKER_FLAGS_<CONFIG>_INIT
+  foreach(CONFIG DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    foreach(TYPE EXE SHARED)
+      set(VAR CMAKE_${TYPE}_LINKER_FLAGS_${CONFIG}_INIT)
+      set(${VAR} "${LDFLAGS}" CACHE STRING "")
+      mark_as_advanced(${VAR})
+    endforeach()
   endforeach()
-  if(DEBUG_COMPILER_FLAGS)
-    message("")
-  endif()
-endforeach()
+endfunction(define_compiler_init_variables)
